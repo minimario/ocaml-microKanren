@@ -5,10 +5,4 @@ ocamlfind ocamldep -package oUnit -package core -modules mukanren.ml > mukanren.
 ocamlfind ocamlc -c -thread -package oUnit -package core -o mukanren.cmo mukanren.ml # cached
 # Target: mukanren.byte, tags: { package(core), package(oUnit), byte, dont_link_with, extension:byte, file:mukanren.byte, link, ocaml, program, quiet, thread, traverse }
 ocamlfind ocamlc -linkpkg -thread -package oUnit -package core mukanren.cmo -o mukanren.byte # cached
-# Target: test.ml.depends, tags: { package(core), package(oUnit), extension:ml, file:test.ml, ocaml, ocamldep, quiet, thread, traverse }
-ocamlfind ocamldep -package oUnit -package core -modules test.ml > test.ml.depends
-# Target: test.cmo, tags: { package(core), package(oUnit), byte, compile, extension:cmo, extension:ml, file:test.cmo, file:test.ml, implem, ocaml, quiet, thread, traverse }
-ocamlfind ocamlc -c -thread -package oUnit -package core -o test.cmo test.ml
-# Target: test.byte, tags: { package(core), package(oUnit), byte, dont_link_with, extension:byte, file:test.byte, link, ocaml, program, quiet, thread, traverse }
-ocamlfind ocamlc -linkpkg -thread -package oUnit -package core mukanren.cmo test.cmo -o test.byte
 # Compilation successful.

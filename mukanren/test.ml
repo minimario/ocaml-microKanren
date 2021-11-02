@@ -41,7 +41,27 @@ let rec appendo = fun l s out ->
                 ))
             )
         ))))
-    
+
+let rec appendo2 = fun l s out ->
+    (disj
+        (conj 
+            (equals (TermList []) l)
+            (equals s out)
+        )
+        (call_fresh (fun a -> (call_fresh (fun d ->
+            (conj 
+                (equals (TermList [Variable a; Variable d]) l))
+                (call_fresh (fun res ->
+                    (conj 
+                        (fun sc ->
+                            Immature_stream (fun () -> (appendo2 (Variable d) s (Variable res) sc))
+                        )
+                        (equals (TermList [Variable a; Variable res]) out))
+                    )
+                ))
+            )
+        ))
+    )
 
 let call_appendo = (
     (call_fresh (fun q ->
@@ -58,18 +78,52 @@ let call_appendo = (
     )) empty_state
 )
 
-let ground_appendo = (appendo (Value 3) (Value 6) (TermList [Value 3; Value 6])) empty_state
+let call_appendo2 = (
+    (call_fresh (fun q ->
+        (call_fresh (fun l ->
+            (call_fresh (fun s ->
+                (call_fresh (fun out ->
+                    (conj
+                        (appendo2 (Variable l) (Variable s) (Variable out))
+                        (equals (TermList [Variable l; Variable s; Variable out]) (Variable q))
+                    )
+                ))
+            ))
+        ))
+    )) empty_state
+)
 
-let rec print_term term = match term with 
+let rec relo = fun x ->
+    (call_fresh (fun x1 -> (call_fresh (fun x2 ->
+        (conj 
+            (equals x (TermList [Variable x1; Variable x2]))
+            (disj
+                (equals (Variable x1) (Variable x2))
+                (fun sc ->
+                    Immature_stream (fun () -> (relo x sc))    
+                )
+            )
+        )
+    ))))
+
+let many_non_ans = 
+    call_fresh (fun x -> 
+        (disj 
+            (relo (TermList [Value 5; Value 6]))
+            (equals (Variable x) (Value 3))
+        )
+    ) empty_state
+
+let rec term_to_str term = match term with 
     | Variable v -> "Variable(" ^ string_of_int v ^ ")"
     | Value v -> "Value(" ^ string_of_int v ^ ")"
     | TermList tl -> 
-        let terms = List.map ~f:print_term tl in
+        let terms = List.map ~f:term_to_str tl in
             "TermList [" ^ (String.concat ~sep:", " terms) ^ "]"
 
 let subst_to_string subst = 
     let terms = List.map ~f:(fun (variable, term) ->
-        "Variable(" ^ string_of_int variable ^ ") -> " ^ print_term term
+        "Variable(" ^ string_of_int variable ^ ") -> " ^ term_to_str term
     ) subst in 
     "[" ^ (String.concat ~sep:", " terms) ^ "]"
 
@@ -78,33 +132,11 @@ let rec find_next_mature stream = match stream with
     | Mature_stream (state, stream) -> Mature_stream (state, stream)
     | Immature_stream is -> find_next_mature (is ())
 
-let main = 
-    match ground_appendo with 
-    | Empty_stream -> print_string "empty"
-    | Mature_stream (state, next_stream) ->
-        let (substitution, next_counter) = state in
-        print_string ((subst_to_string substitution) ^ ", " ^ string_of_int next_counter ^ "\n");
-    | _ -> print_string ":("
-
-(* let main = 
-    match call_appendo with 
-    | Mature_stream (state, next_stream) ->
-        let (substitution, next_counter) = state in
-        print_string ((subst_to_string substitution) ^ ", " ^ string_of_int next_counter ^ "\n");
-        let next_mature = find_next_mature next_stream in
-        (match next_mature with 
-        | Mature_stream (state', next_stream') ->
-            let (substitution', next_counter') = state' in
-            print_string ((subst_to_string substitution') ^ ", " ^ string_of_int next_counter' ^ "\n");
-        | _ -> print_string ":|")
-    | _ -> print_string ":(" *)
-
-(* let tests = "Test Suite for Microkanren" >::: [
+let tests = "Test Suite for Microkanren" >::: [
     "one-variable" >::
     (fun _ ->
         match one_variable with 
-        | Mature_stream (state, Empty_stream) ->
-            let (substitution, next) = state in
+        | Mature_stream ((substitution, next), Empty_stream) ->
             assert_equal (subst_to_string substitution) "[Variable(0) -> Value(5)]";
             assert_equal next 1
         | _ -> assert_bool "one-variable failed" false
@@ -113,8 +145,7 @@ let main =
     "a-and-b-1" >::
     (fun _ ->
         match a_and_b with 
-        | Mature_stream (state, _) ->
-            let (substitution, next) = state in
+        | Mature_stream ((substitution, next), _) ->
             assert_equal (subst_to_string substitution) 
                         "[Variable(1) -> Value(5), Variable(0) -> Value(7)]";
             assert_equal next 2
@@ -135,14 +166,54 @@ let main =
     "fives" >::
     (fun _ ->
         match who_cares with 
-        | Mature_stream (state, _) ->
-            let (substitution, next) = state in
+        | Mature_stream ((substitution, next), _) ->
             assert_equal (subst_to_string substitution) "[Variable(0) -> Value(5)]";
             assert_equal next 1
         | _ -> assert_bool "who-cares failed" false
     );
 
+    "appendo" >::
+    (fun _ ->
+        match call_appendo with 
+        | Mature_stream ((substitution, next), next_stream) ->
+            assert_equal (subst_to_string substitution)
+                         "[Variable(0) -> TermList [Variable(1), Variable(2), Variable(3)], Variable(2) -> Variable(3), Variable(1) -> TermList []]";
+            assert_equal next 4;
 
+            (match find_next_mature next_stream with 
+            | Mature_stream ((substitution', next'), _) ->
+                assert_equal (subst_to_string substitution') 
+                             "[Variable(0) -> TermList [Variable(1), Variable(2), Variable(3)], Variable(2) -> Variable(6), Variable(5) -> TermList [], Variable(3) -> TermList [Variable(4), Variable(6)], Variable(1) -> TermList [Variable(4), Variable(5)]]";
+                assert_equal next' 7;
+            | _ -> assert_bool "appendo failed on second stream" false)
+        | _ -> assert_bool "appendo failed on first result" false
+    );
+
+    "appendo2" >::
+    (fun _ ->
+        match call_appendo2 with 
+        | Mature_stream ((substitution, next), next_stream) ->
+            assert_equal (subst_to_string substitution)
+                         "[Variable(0) -> TermList [Variable(1), Variable(2), Variable(3)], Variable(2) -> Variable(3), Variable(1) -> TermList []]";
+            assert_equal next 4;
+
+            (match find_next_mature next_stream with 
+            | Mature_stream ((substitution', next'), _) ->
+                assert_equal (subst_to_string substitution') 
+                             "[Variable(0) -> TermList [Variable(1), Variable(2), Variable(3)], Variable(3) -> TermList [Variable(4), Variable(6)], Variable(2) -> Variable(6), Variable(5) -> TermList [], Variable(1) -> TermList [Variable(4), Variable(5)]]";
+                assert_equal next' 7;
+            | _ -> assert_bool "appendo failed on second stream" false)
+        | _ -> assert_bool "appendo failed on first result" false
+    );
+
+    "many non-ans" >::
+    (fun _ ->
+        match many_non_ans with 
+        | Mature_stream ((substitution, next), _) ->
+            assert_equal (subst_to_string substitution) "[Variable(0) -> Value(3)]";
+            assert_equal next 1
+        | _ -> assert_bool "many non-ans failed" false
+    );
 ]
 
-let _ = run_test_tt_main tests *)
+let _ = run_test_tt_main tests

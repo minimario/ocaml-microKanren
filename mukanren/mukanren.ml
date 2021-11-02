@@ -5,7 +5,6 @@ type 'a term =
     | Variable of variable
     | Value of 'a
     | TermList of ('a term) list
-
 type 'a substitution = (variable * 'a term) list;;
 type 'a state = 'a substitution * int
 type 
@@ -14,11 +13,8 @@ type
     | Empty_stream
     | Mature_stream of 'a state * 'a stream 
     | Immature_stream of 'a immature_stream
-
 type 'a goal = 'a state -> 'a stream
-(* type stream =  *)
 
-(* walk :: term -> substitution -> term *)
 let walk (var : 'a term) (substitution : 'a substitution) =
     match var with 
     | Variable v -> 
@@ -27,6 +23,7 @@ let walk (var : 'a term) (substitution : 'a substitution) =
         | _ -> Variable v)
     | nonvariable -> nonvariable
 
+let empty_state : 'a state = ([], 0)
 let ext_s (var : variable) (term : 'a term) (subst : 'a substitution) = (var, term) :: subst 
 
 let rec term_equal term1 term2 = 
@@ -43,6 +40,7 @@ let rec unify u v subst =
     | Variable u_var, Variable v_var when u_var = v_var -> subst
     | Variable u_var, v_term -> ext_s u_var v_term subst
     | u_term, Variable v_var -> ext_s v_var u_term subst
+    | TermList [], _ | _, TermList [] -> []
     | TermList u_list, TermList v_list ->
         let subst' = unify (List.hd_exn u_list) (List.hd_exn v_list) subst in
         let subst'' = unify (TermList (List.tl_exn u_list)) (TermList (List.tl_exn v_list)) subst' in
@@ -75,6 +73,5 @@ let rec bind s (g : 'a state -> 'a stream) = match s with
 
 let disj (g1 : 'a state -> 'a stream) (g2 : 'a state -> 'a stream) = 
     fun sc -> mplus (g1 sc) (g2 sc)
-let conj (g1 : 'a state -> 'a stream) (g2 : 'a state -> 'a stream) = fun sc -> bind (g1 sc) g2 
-
-let empty_state : 'a state = ([], 0)
+let conj (g1 : 'a state -> 'a stream) (g2 : 'a state -> 'a stream) = 
+    fun sc -> bind (g1 sc) g2 
